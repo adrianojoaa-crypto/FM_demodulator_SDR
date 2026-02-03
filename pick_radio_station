@@ -1,0 +1,39 @@
+import fire
+import numpy as np
+from numpy import pi
+from scipy.io import wavfile
+from scipy.signal import hilbert, resample, fftconvolve, lfilter
+import FM_demod_iq_clean as demod
+
+#---------------------Interaction 1-----------------------
+
+freq_list = [
+    "1. 97.3MHz", 
+    "2. 97.8MHz", 
+    "3. 98.5MHz", 
+    "4. 98.8MHz", 
+    "5. 99.25MHz", 
+    "6. 100MHz", 
+    "7. 100.6MHz"
+]
+
+while True:
+    print("Choose a radio station (Enter number from 1-7):")
+    print("\n".join(f"{freq}" for freq in freq_list))
+    choice_string = input("> ") #string containing station number
+    if choice_string.isdigit():
+        choice_int = int(choice_string) #actual integer (station number)
+        stations = [-1700000,-1200000,-500000,-200000,250000,1000000,1600000] #list of station frequencies
+        if 1 <= choice_int <= 7:
+            index = choice_int - 1
+            selected_f_o = stations[index]
+            print("Demodulation in progress")
+            demod.fm_radio_demodulator(selected_f_o, choice_int) 
+            break
+        else:
+            print("Station not found, enter a valid number")
+    else:
+        print("Station not found, enter a valid number")
+
+
+
