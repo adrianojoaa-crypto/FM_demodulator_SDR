@@ -1,0 +1,92 @@
+from typing import List, Optional
+from pathlib import Path
+import fire
+import numpy as np
+from numpy import pi
+from scipy.io import wavfile
+from scipy.signal import hilbert, resample, fftconvolve, lfilter
+
+def fm_radio_demodulator(f_o, station_number):
+    #---------------------Extracting data-----------------------
+        
+    print("fo:",f_o)
+
+    f_s,iq_data = wavfile.read("bfm.2021-12-16T14_23_16_147.wav")
+
+    Inphase = iq_data[:,0]
+    Quadrature = iq_data[:,1]
+    
+    #----------Converting to float (normalizing)-----------
+
+    Inphase = Inphase/32768.0
+    Quadrature = Quadrature/32768.0
+    
+    #------------------Complex envelope-------------------
+
+    C_E = Inphase+1j*Quadrature
+    #-------------Choosing a station (shifting)-----------
+
+    n = np.arange(len(C_E))
+    C_E_100 = C_E * np.exp(-1j * 2*pi * f_o/f_s * n)
+    
+    #-------------------filtering out----------------------
+    
+    M=100
+    w_c = np.pi / 20
+    sub_n = np.arange(M + 1)
+    alpha = M / 2
+    w = 0.54 - 0.46 * np.cos(2 * np.pi * sub_n / M) # Hamming Window calculation
+    h_lp = (w_c / np.pi)*np.sinc(w_c * (sub_n - alpha) / (np.pi ))
+                
+    h = h_lp * w # Final filter
+    #---------------------Isolating station (100MHz)---------------------
+
+    station100 = fftconvolve(C_E_100, h, mode='same')
+
+    #-----------Extracting message from phase (differentiation)-----------
+    
+    '''
+    using np.unwrap to avoid issues with phase distortion
+    '''
+
+    phase = np.unwrap(np.angle(station100))
+
+    message = np.diff(phase)   
+    #print("Checkpoint Extracting message from phase (differentiation)")
+
+    #------------------------Decimating---------------------------
+
+
+    decim_factor = int(f_s / 48000) # Results in 83 for a 4MHz fs
+
+    audio_resampled = message[::decim_factor] 
+
+    # Calculate the actual sampling rate of the new decimated signal
+    # 4,000,000 / 83 = 48,192.77 Hz
+    new_fs = f_s / decim_factor 
+
+    # Use new_fs when writing the file
+    #print("Checkpoint resampling")
+
+    #----------------------De-emphasis Filter------------------------ 
+    d = 0.95 
+    audio_deemph = lfilter([1 - d], [1, -d], audio_resampled)
+    #print("Checkpoint de-emphasis")
+
+    # Normalization and DC Offset Removal
+    audio_final = audio_deemph - np.mean(audio_deemph)
+    audio_final = audio_final / (np.max(np.abs(audio_final)) + 1e-6)
+
+    #print("Checkpoint audio quality improved")
+
+    #--------------------------Export to WAV-------------------------------
+    # file will play 
+    output_file = f"airpods_ready_fm_{station_number}.wav"
+    wavfile.write(output_file, int(new_fs), (audio_final * 32767).astype(np.int16))
+
+    print(f"Iq data processed! Open {output_file} to hear the station.")
+
+
+
+
+
